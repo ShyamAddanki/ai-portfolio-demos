@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patient 360 Suite — Live Case Processing</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #ffffff;
+    color: #1e293b;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  canvas#bg { position: fixed; top: 0; left: 0; z-index: 0; }
+
+  .hud {
+    position: relative;
+    z-index: 2;
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 64px 1fr 150px;
+    grid-template-columns: 280px 1fr 290px;
+    gap: 0;
+    padding: 12px;
+  }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(10px);
+  }
+  .top-bar .logo {
+    font-size: 17px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+  }
+  .top-bar .case-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #6366f1;
+    background: rgba(99,102,241,0.06);
+    padding: 5px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(99,102,241,0.15);
+    font-weight: 600;
+  }
+  .top-bar .status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 12px rgba(16,185,129,0.4);
+    animation: blink 2s ease infinite;
+  }
+  @keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+
+  /* ── LEFT PANEL ── */
+  .left-panel {
+    padding: 20px 14px;
+    overflow-y: auto;
+    border-right: 1px solid #f1f5f9;
+    background: #fafbfd;
+  }
+  .left-title {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #6366f1;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .stage {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 4px;
+    padding: 10px 10px;
+    border-radius: 10px;
+    transition: all 0.4s ease;
+    position: relative;
+  }
+  .stage.active { background: rgba(99,102,241,0.04); }
+  .stage.done .stage-icon { background: linear-gradient(135deg, #10b981, #34d399); border-color: transparent; }
+  .stage.done .stage-icon::after { content: '\2713'; color: #fff; font-size: 10px; font-weight: 900; }
+  .stage.active .stage-icon { border-color: #6366f1; box-shadow: 0 0 16px rgba(99,102,241,0.3); animation: pulseIcon 1.2s ease infinite; }
+  .stage.active .stage-icon::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #6366f1; }
+  @keyframes pulseIcon { 0%,100%{ box-shadow: 0 0 8px rgba(99,102,241,0.2); } 50%{ box-shadow: 0 0 20px rgba(99,102,241,0.5); } }
+
+  .stage-icon {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+    transition: all 0.4s ease;
+    background: #fff;
+  }
+  .stage-connector {
+    position: absolute;
+    left: 21px;
+    top: 36px;
+    width: 2px;
+    height: calc(100% - 10px);
+    background: linear-gradient(180deg, #e2e8f0, #f1f5f9);
+  }
+  .stage.done .stage-connector { background: linear-gradient(180deg, rgba(16,185,129,0.4), rgba(16,185,129,0.05)); }
+  .stage-info { flex: 1; }
+  .stage-name { font-size: 12px; font-weight: 700; color: #94a3b8; transition: color 0.3s; }
+  .stage.active .stage-name { color: #6366f1; }
+  .stage.done .stage-name { color: #1e293b; }
+  .stage-detail { font-size: 10px; color: #94a3b8; font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+  .stage.active .stage-detail { color: #6366f1; }
+  .stage-time { font-size: 9px; color: #cbd5e1; font-family: 'JetBrains Mono', monospace; margin-top: 3px; opacity: 0; transition: opacity 0.3s; }
+  .stage.done .stage-time { opacity: 1; color: #10b981; font-weight: 600; }
+  .stage.active .stage-time { opacity: 1; color: #94a3b8; }
+
+  /* ── CENTER ── */
+  .center-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .orb-container { position: relative; width: 340px; height: 340px; }
+
+  /* Outer glow ring */
+  .orb-glow {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 170px; height: 170px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, #6366f1, #8b5cf6, #a855f7, #ec4899, #f43f5e, #f59e0b, #10b981, #14b8a6, #6366f1);
+    opacity: 0.15;
+    filter: blur(20px);
+    animation: glowSpin 6s linear infinite;
+  }
+  .orb-glow.processing { opacity: 0.3; width: 190px; height: 190px; filter: blur(25px); }
+  .orb-glow.deciding { opacity: 0.4; width: 200px; height: 200px; filter: blur(28px);
+    background: conic-gradient(from 0deg, #f59e0b, #fbbf24, #f97316, #ef4444, #f59e0b); }
+  .orb-glow.approved { opacity: 0.45; width: 210px; height: 210px; filter: blur(30px);
+    background: conic-gradient(from 0deg, #10b981, #34d399, #6ee7b7, #a7f3d0, #10b981); }
+  @keyframes glowSpin { 0%{ transform: translate(-50%,-50%) rotate(0deg); } 100%{ transform: translate(-50%,-50%) rotate(360deg); } }
+
+  /* Main orb */
+  .orb {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, #6366f1, #8b5cf6, #a855f7, #ec4899, #f43f5e, #f59e0b, #10b981, #14b8a6, #6366f1);
+    padding: 3px;
+    animation: orbSpin 8s linear infinite;
+    transition: all 0.6s ease;
+    box-shadow: 0 0 30px rgba(99,102,241,0.15);
+  }
+  .orb-inner {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  @keyframes orbSpin { 0%{ transform: translate(-50%,-50%) rotate(0deg); } 100%{ transform: translate(-50%,-50%) rotate(360deg); } }
+
+  .orb.processing {
+    box-shadow: 0 0 40px rgba(99,102,241,0.25), 0 0 80px rgba(139,92,246,0.1);
+    animation: orbSpin 4s linear infinite, orbBreath 2s ease infinite;
+  }
+  .orb.deciding {
+    background: conic-gradient(from 0deg, #f59e0b, #fbbf24, #f97316, #ef4444, #f59e0b);
+    box-shadow: 0 0 40px rgba(245,158,11,0.25), 0 0 80px rgba(251,191,36,0.1);
+    animation: orbSpin 3s linear infinite, orbBreath 1.5s ease infinite;
+  }
+  .orb.approved {
+    background: conic-gradient(from 0deg, #10b981, #34d399, #6ee7b7, #a7f3d0, #10b981);
+    box-shadow: 0 0 50px rgba(16,185,129,0.3), 0 0 100px rgba(52,211,153,0.1);
+    animation: orbSpin 6s linear infinite, orbBreath 2s ease infinite;
+  }
+  @keyframes orbBreath {
+    0%,100%{ transform:translate(-50%,-50%) rotate(var(--r, 0deg)) scale(1); }
+    50%{ transform:translate(-50%,-50%) rotate(var(--r, 0deg)) scale(1.06); }
+  }
+
+  /* Sparkle particles around orb */
+  .sparkle {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    opacity: 0;
+  }
+  .sparkle.active {
+    animation: sparkleFloat 2s ease-in-out infinite;
+  }
+  .sparkle:nth-child(1) { top: 20%; left: 15%; background: #6366f1; animation-delay: 0s; }
+  .sparkle:nth-child(2) { top: 10%; right: 20%; background: #ec4899; animation-delay: 0.4s; }
+  .sparkle:nth-child(3) { bottom: 15%; left: 20%; background: #f59e0b; animation-delay: 0.8s; }
+  .sparkle:nth-child(4) { bottom: 20%; right: 15%; background: #10b981; animation-delay: 1.2s; }
+  .sparkle:nth-child(5) { top: 40%; left: 5%; background: #a855f7; animation-delay: 0.2s; }
+  .sparkle:nth-child(6) { top: 30%; right: 5%; background: #14b8a6; animation-delay: 0.6s; }
+  .sparkle:nth-child(7) { bottom: 35%; left: 8%; background: #f43f5e; animation-delay: 1.0s; }
+  .sparkle:nth-child(8) { bottom: 10%; right: 25%; background: #8b5cf6; animation-delay: 1.4s; }
+  @keyframes sparkleFloat {
+    0% { opacity: 0; transform: scale(0) translateY(10px); }
+    30% { opacity: 0.8; transform: scale(1.2) translateY(-5px); }
+    60% { opacity: 0.4; transform: scale(0.8) translateY(-15px); }
+    100% { opacity: 0; transform: scale(0) translateY(-25px); }
+  }
+
+  .orb-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+  }
+  .orb-label .main {
+    font-size: 14px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: all 0.4s ease;
+  }
+  .orb-label .sub {
+    font-size: 10px;
+    color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 4px;
+  }
+
+  .ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .ring1 { width: 200px; height: 200px; border: 1.5px solid rgba(99,102,241,0.15); animation: ringRotate 18s linear infinite; }
+  .ring2 { width: 260px; height: 260px; border: 1.5px dashed rgba(168,85,247,0.12); animation: ringRotate 28s linear infinite reverse; }
+  .ring3 { width: 320px; height: 320px; border: 1.5px solid rgba(236,72,153,0.1); animation: ringRotate 22s linear infinite; }
+  @keyframes ringRotate { 0%{ transform: translate(-50%,-50%) rotate(0deg); } 100%{ transform: translate(-50%,-50%) rotate(360deg); } }
+
+  .ring-dot {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    top: -4px; left: 50%;
+  }
+  .ring1 .ring-dot { background: #6366f1; box-shadow: 0 0 14px rgba(99,102,241,0.6), 0 0 28px rgba(99,102,241,0.2); }
+  .ring2 .ring-dot { background: #a855f7; box-shadow: 0 0 14px rgba(168,85,247,0.6), 0 0 28px rgba(168,85,247,0.2); }
+  .ring3 .ring-dot { background: #ec4899; box-shadow: 0 0 14px rgba(236,72,153,0.6), 0 0 28px rgba(236,72,153,0.2); }
+
+  .center-msg {
+    position: absolute;
+    bottom: 30px;
+    text-align: center;
+    opacity: 0;
+    transition: all 0.6s ease;
+  }
+  .center-msg.show { opacity: 1; }
+  .center-msg .text {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #6366f1;
+    background: rgba(99,102,241,0.04);
+    padding: 8px 18px;
+    border-radius: 20px;
+    border: 1px solid rgba(99,102,241,0.1);
+    font-weight: 600;
+  }
+
+  /* ── RIGHT PANEL ── */
+  .right-panel {
+    padding: 20px 14px;
+    border-left: 1px solid #f1f5f9;
+    overflow-y: auto;
+    background: #fafbfd;
+  }
+  .right-title {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #6366f1;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .log-entry {
+    padding: 8px 10px;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    opacity: 0;
+    transform: translateX(10px);
+    transition: all 0.4s ease;
+  }
+  .log-entry.show { opacity: 1; transform: translateX(0); }
+  .log-entry.info { border-left-color: #10b981; background: rgba(16,185,129,0.03); }
+  .log-entry.warn { border-left-color: #f59e0b; background: rgba(245,158,11,0.03); }
+  .log-entry.success { border-left-color: #10b981; background: rgba(16,185,129,0.06); }
+  .log-entry.agent { border-left-color: #6366f1; background: rgba(99,102,241,0.03); }
+  .log-time { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #94a3b8; font-weight: 600; }
+  .log-msg { color: #475569; margin-top: 3px; font-size: 10px; line-height: 1.4; }
+  .log-msg .hl { color: #10b981; font-weight: 700; }
+  .log-msg .warn-hl { color: #f59e0b; font-weight: 700; }
+  .log-msg .agent-hl { color: #6366f1; font-weight: 700; }
+
+  /* ── BOTTOM ── */
+  .bottom-bar {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    padding: 14px 12px 0;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+  }
+  .metric-card {
+    background: #fafbfd;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(15px);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .metric-card.show { opacity: 1; transform: translateY(0); }
+  .metric-card.show { box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
+  .metric-card .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .metric-card .lbl {
+    font-size: 9px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 8px;
+  }
+  .mc1 .val { color: #10b981; }
+  .mc1.show { border-color: rgba(16,185,129,0.2); background: rgba(16,185,129,0.02); }
+  .mc2 .val { color: #14b8a6; }
+  .mc2.show { border-color: rgba(20,184,166,0.2); background: rgba(20,184,166,0.02); }
+  .mc3 .val { color: #6366f1; }
+  .mc3.show { border-color: rgba(99,102,241,0.2); background: rgba(99,102,241,0.02); }
+  .mc4 .val { color: #a855f7; }
+  .mc4.show { border-color: rgba(168,85,247,0.2); background: rgba(168,85,247,0.02); }
+
+  /* ── VERDICT OVERLAY ── */
+  .verdict-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(12px);
+  }
+  .verdict-overlay.show { opacity: 1; }
+  .verdict-box {
+    text-align: center;
+    transform: scale(0.8);
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .verdict-overlay.show .verdict-box { transform: scale(1); }
+  .verdict-text {
+    font-size: 72px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #10b981, #14b8a6, #2dd4bf);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 10px;
+    filter: drop-shadow(0 4px 20px rgba(16,185,129,0.2));
+  }
+  .verdict-sub {
+    font-size: 13px;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 12px;
+    letter-spacing: 2px;
+    font-weight: 600;
+  }
+  .verdict-citation {
+    margin-top: 20px;
+    font-size: 11px;
+    color: #475569;
+    font-family: 'JetBrains Mono', monospace;
+    background: #f8fafc;
+    display: inline-block;
+    padding: 10px 24px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  }
+  .verdict-citation .src { color: #6366f1; font-weight: 700; }
+
+  .footer-line {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px 0;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .footer-line.show { opacity: 1; }
+  .footer-line .tagline {
+    font-size: 13px;
+    font-weight: 800;
+    font-style: italic;
+    color: #1e293b;
+  }
+  .footer-line .author {
+    font-size: 15px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .replay-btn {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 26px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: 0;
+    z-index: 100;
+    box-shadow: 0 8px 30px rgba(99,102,241,0.25);
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+  }
+  .replay-btn.show { opacity: 1; }
+  .replay-btn:hover { transform: scale(1.06); box-shadow: 0 12px 40px rgba(99,102,241,0.35); }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<div class="hud">
+  <div class="top-bar">
+    <div class="logo">PATIENT 360 SUITE</div>
+    <div class="case-id" id="caseId">PAT 360-2026-00412</div>
+    <div class="status"><div class="status-dot" id="statusDot"></div><span id="statusText">INITIALIZING</span></div>
+  </div>
+
+  <div class="left-panel">
+    <div class="left-title">Pipeline Stages</div>
+    <div class="stage" id="s1"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Patient Lookup</div><div class="stage-detail">MRN + payer + demographics</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s2"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Triage & Routing</div><div class="stage-detail">Agent 1 — urgency classification</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s3"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Case Scoring</div><div class="stage-detail">Agent 5 — acuity + docs + financial</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s4"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Next Best Action</div><div class="stage-detail">Agent 3 — LLM recommendations</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s5"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Touchpoint Gen</div><div class="stage-detail">Agent 8 — SMS + email drafts</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s6"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Denials Check</div><div class="stage-detail">Agent 9 — payer pattern detection</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s7"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Blueprint</div><div class="stage-detail">Agent 7 — strategic narrative</div><div class="stage-time">&mdash;</div></div></div>
+    <div class="stage" id="s8"><div class="stage-icon"></div><div class="stage-info"><div class="stage-name">Output</div><div class="stage-detail">dashboard + KPIs + audit</div><div class="stage-time">&mdash;</div></div></div>
+  </div>
+
+  <div class="center-panel">
+    <div class="orb-container">
+      <div class="ring ring3"><div class="ring-dot"></div></div>
+      <div class="ring ring2"><div class="ring-dot" style="left:auto;right:0;top:50%;"></div></div>
+      <div class="ring ring1"><div class="ring-dot" style="top:auto;bottom:-4px;left:30%;"></div></div>
+      <div class="sparkle" id="sp1"></div>
+      <div class="sparkle" id="sp2"></div>
+      <div class="sparkle" id="sp3"></div>
+      <div class="sparkle" id="sp4"></div>
+      <div class="sparkle" id="sp5"></div>
+      <div class="sparkle" id="sp6"></div>
+      <div class="sparkle" id="sp7"></div>
+      <div class="sparkle" id="sp8"></div>
+      <div class="orb-glow" id="orbGlow"></div>
+      <div class="orb" id="orb"><div class="orb-inner"></div></div>
+      <div class="orb-label">
+        <div class="main" id="orbMain">READY</div>
+        <div class="sub" id="orbSub">awaiting case</div>
+      </div>
+    </div>
+    <div class="center-msg" id="centerMsg"><div class="text" id="centerText"></div></div>
+  </div>
+
+  <div class="right-panel">
+    <div class="right-title">Live Processing Log</div>
+    <div id="logContainer"></div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="metric-card mc1" id="mc1"><div class="val" id="mcv1">&mdash;</div><div class="lbl">Health Score</div></div>
+    <div class="metric-card mc2" id="mc2"><div class="val" id="mcv2">&mdash;</div><div class="lbl">Agents Active</div></div>
+    <div class="metric-card mc3" id="mc3"><div class="val" id="mcv3">&mdash;</div><div class="lbl">Open Cases</div></div>
+    <div class="metric-card mc4" id="mc4"><div class="val" id="mcv4">&mdash;</div><div class="lbl">Overdue Tasks</div></div>
+    <div class="footer-line" id="footerLine">
+      <div class="tagline">9 agents. One patient view. Zero gaps in the care journey.</div>
+      <div class="author">&mdash; Shyam</div>
+    </div>
+  </div>
+</div>
+
+<div class="verdict-overlay" id="verdictOverlay">
+  <div class="verdict-box">
+    <div class="verdict-text">TRIAGED</div>
+    <div class="verdict-sub">URGENCY: HIGH &mdash; NBA: FOLLOW-UP WITHIN 48 HRS</div>
+    <div class="verdict-citation">cited: <span class="src">case: CS-412-A &sect;2</span> &rarr; <span class="src">protocol: Urgent Care Pathway &para;1.3</span></div>
+  </div>
+</div>
+
+<button class="replay-btn" id="replayBtn" onclick="location.reload()">&#9654; &nbsp;Replay</button>
+
+<script>
+// ── Soft background particles (multi-color) ──
+const c = document.getElementById('bg');
+const ctx = c.getContext('2d');
+c.width = innerWidth; c.height = innerHeight;
+window.addEventListener('resize', () => { c.width = innerWidth; c.height = innerHeight; });
+
+const colors = [
+  [99,102,241],  // indigo
+  [139,92,246],  // violet
+  [168,85,247],  // purple
+  [236,72,153],  // pink
+  [16,185,129],  // emerald
+  [20,184,166],  // teal
+  [245,158,11],  // amber
+];
+
+const pts = Array.from({length: 50}, () => {
+  const col = colors[Math.floor(Math.random()*colors.length)];
+  return {
+    x: Math.random()*c.width, y: Math.random()*c.height,
+    vx: (Math.random()-0.5)*0.15, vy: (Math.random()-0.5)*0.15,
+    r: Math.random()*2+0.5, col,
+    o: Math.random()*0.12+0.03
+  };
+});
+
+function drawBg() {
+  ctx.clearRect(0,0,c.width,c.height);
+  pts.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if(p.x<0||p.x>c.width) p.vx*=-1;
+    if(p.y<0||p.y>c.height) p.vy*=-1;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},${p.o})`;
+    ctx.fill();
+  });
+  for(let i=0;i<pts.length;i++) {
+    for(let j=i+1;j<pts.length;j++) {
+      const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+      const d = Math.sqrt(dx*dx+dy*dy);
+      if(d<140) {
+        ctx.beginPath();
+        ctx.moveTo(pts[i].x,pts[i].y);
+        ctx.lineTo(pts[j].x,pts[j].y);
+        const avg = [
+          (pts[i].col[0]+pts[j].col[0])/2,
+          (pts[i].col[1]+pts[j].col[1])/2,
+          (pts[i].col[2]+pts[j].col[2])/2
+        ];
+        ctx.strokeStyle = `rgba(${avg[0]|0},${avg[1]|0},${avg[2]|0},${0.025*(1-d/140)})`;
+        ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ── Helpers ──
+const $ = id => document.getElementById(id);
+function addLog(type, time, msg) {
+  const d = document.createElement('div');
+  d.className = `log-entry ${type}`;
+  d.innerHTML = `<div class="log-time">${time}</div><div class="log-msg">${msg}</div>`;
+  $('logContainer').appendChild(d);
+  setTimeout(() => d.classList.add('show'), 50);
+  d.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function setStage(id, state, timeText) {
+  const el = $(id);
+  el.classList.remove('active','done');
+  el.classList.add(state);
+  el.querySelector('.stage-time').textContent = timeText || '';
+}
+
+function setOrb(main, sub, cls) {
+  $('orbMain').textContent = main;
+  $('orbSub').textContent = sub;
+  $('orb').className = 'orb ' + (cls||'');
+  $('orbGlow').className = 'orb-glow ' + (cls||'');
+  // Activate sparkles when processing
+  document.querySelectorAll('.sparkle').forEach(s => {
+    if (cls) s.classList.add('active');
+    else s.classList.remove('active');
+  });
+}
+
+function setStatus(text) { $('statusText').textContent = text; }
+function showCenter(text) { $('centerText').textContent = text; $('centerMsg').classList.add('show'); }
+function hideCenter() { $('centerMsg').classList.remove('show'); }
+
+function countUp(id, end, dur, fmt) {
+  const el = $(id);
+  const t0 = performance.now();
+  (function tick(now) {
+    const p = Math.min((now-t0)/dur,1);
+    const e = 1-Math.pow(1-p,3);
+    el.textContent = fmt(end*e);
+    if(p<1) requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+// ── MAIN TIMELINE ──
+function run() {
+  const T = [
+    [500, () => { setStatus('PATIENT RECEIVED'); setOrb('LOOKUP','loading patient','processing'); }],
+    [800, () => addLog('info','00:00.000','Patient loaded — <span class="hl">MRN: 00412</span>, Payer: Aetna, Age: 67')],
+
+    [1200, () => setStage('s1','active')],
+    [1500, () => addLog('info','00:00.120','3 open cases found — <span class="warn-hl">2 overdue tasks</span> detected')],
+    [2000, () => addLog('info','00:00.184','Health score calculated: <span class="hl">68 / 100</span>')],
+    [2400, () => setStage('s1','done','184ms')],
+
+    [2600, () => { setStage('s2','active'); setOrb('TRIAGE','classifying urgency','processing'); }],
+    [3000, () => addLog('agent','00:00.241','<span class="agent-hl">Agent 1</span>: Triage classification — <span class="warn-hl">URGENT</span>')],
+    [3400, () => { setStage('s2','done','114ms'); }],
+
+    [3700, () => { setStage('s3','active'); setOrb('SCORING','case acuity','processing'); }],
+    [4100, () => addLog('agent','00:00.412','<span class="agent-hl">Agent 5</span>: Case acuity scored — <span class="warn-hl">HIGH</span> (financial impact: $12,400)')],
+    [4500, () => { setStage('s3','done','374ms'); }],
+
+    [4800, () => { setStage('s4','active'); setOrb('NBA','generating actions','processing'); setStatus('AI AGENTS ACTIVE'); }],
+    [5100, () => showCenter('Multi-Agent Orchestration Active')],
+    [5500, () => addLog('agent','00:00.812','<span class="agent-hl">Agent 3</span>: NBA — <span class="hl">Schedule follow-up within 48 hours</span>')],
+    [5900, () => setStage('s4','done','680ms')],
+
+    [6200, () => { setStage('s5','active'); setOrb('TOUCHPOINT','drafting comms','processing'); }],
+    [6600, () => addLog('agent','00:01.312','<span class="agent-hl">Agent 8</span>: SMS touchpoint drafted — \'Your care team...\'')],
+    [7000, () => setStage('s5','done','800ms')],
+
+    [7300, () => { setStage('s6','active'); setOrb('DENIALS','checking patterns','processing'); }],
+    [7700, () => addLog('agent','00:01.687','<span class="agent-hl">Agent 9</span>: No denial patterns detected for <span class="hl">Aetna</span>')],
+    [8100, () => setStage('s6','done','580ms')],
+
+    [8400, () => { setStage('s7','active'); setOrb('BLUEPRINT','strategic narrative','processing'); setStatus('NARRATIVE GENERATION'); }],
+    [8800, () => addLog('agent','00:02.012','<span class="agent-hl">Agent 7</span>: Strategic blueprint narrative generated')],
+    [9200, () => { setStage('s7','done','334ms'); hideCenter(); }],
+
+    [9500, () => { setStage('s8','active'); setOrb('DONE','case complete','approved'); setStatus('CASE COMPLETE'); }],
+    [9800, () => addLog('success','00:03.112','All <span class="hl">9 agents</span> complete — dashboard updated')],
+    [10200, () => { setStage('s8','done','341ms'); }],
+
+    [10800, () => $('verdictOverlay').classList.add('show')],
+    [12400, () => $('verdictOverlay').classList.remove('show')],
+
+    [12600, () => { $('mc1').classList.add('show'); countUp('mcv1',68,1200,v=>Math.round(v).toString()); }],
+    [12900, () => { $('mc2').classList.add('show'); countUp('mcv2',9,800,v=>Math.round(v).toString()); }],
+    [13200, () => { $('mc3').classList.add('show'); countUp('mcv3',3,800,v=>Math.round(v).toString()); }],
+    [13500, () => { $('mc4').classList.add('show'); countUp('mcv4',2,800,v=>Math.round(v).toString()); }],
+
+    [14200, () => $('footerLine').classList.add('show')],
+    [14900, () => $('replayBtn').classList.add('show')],
+  ];
+  T.forEach(([t,fn]) => setTimeout(fn, t));
+}
+window.addEventListener('load', () => setTimeout(run, 400));
+</script>
+</body>
+</html>

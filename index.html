@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shyam Addanki — AI Portfolio Demos</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #ffffff;
+    color: #1e293b;
+    min-height: 100vh;
+  }
+  .header {
+    text-align: center;
+    padding: 60px 20px 30px;
+  }
+  .header h1 {
+    font-size: 42px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+  }
+  .header p {
+    font-size: 16px;
+    color: #64748b;
+    margin-top: 12px;
+    font-weight: 500;
+  }
+  .header .author {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-top: 8px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 0 24px 60px;
+  }
+  .card {
+    background: #fafbfd;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 28px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(99,102,241,0.12);
+    border-color: rgba(99,102,241,0.3);
+  }
+  .card .tag {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    display: inline-block;
+    margin-bottom: 12px;
+  }
+  .tag-health { background: rgba(16,185,129,0.1); color: #10b981; }
+  .tag-fintech { background: rgba(99,102,241,0.1); color: #6366f1; }
+  .tag-finserv { background: rgba(245,158,11,0.1); color: #f59e0b; }
+  .tag-agile { background: rgba(20,184,166,0.1); color: #14b8a6; }
+  .tag-enterprise { background: rgba(168,85,247,0.1); color: #a855f7; }
+  .tag-genai { background: rgba(236,72,153,0.1); color: #ec4899; }
+  .tag-pa { background: rgba(239,68,68,0.1); color: #ef4444; }
+  .card h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 8px;
+  }
+  .card p {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .card .metrics {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .card .metric {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6366f1;
+    background: rgba(99,102,241,0.06);
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(99,102,241,0.1);
+  }
+  .card .cta {
+    margin-top: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6366f1;
+    letter-spacing: 0.5px;
+  }
+  .footer {
+    text-align: center;
+    padding: 30px;
+    border-top: 1px solid #f1f5f9;
+    color: #94a3b8;
+    font-size: 13px;
+  }
+  .footer a { color: #6366f1; text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>AI Portfolio Demos</h1>
+  <p>6 interactive animated demos — click any card to launch the live pipeline visualization</p>
+  <div class="author">Shyam Addanki | Executive MBA | PMP | SAFe SPC 6.0 | Maven Agentic AI</div>
+</div>
+
+<div class="grid">
+
+  <a href="prior-auth-white-premium.html" class="card">
+    <span class="tag tag-pa">HEALTHCARE</span>
+    <h2>PriorAuthAI</h2>
+    <p>3-agent Prior Authorization decisioning pipeline with citation verification, hallucination detection, and safety gating. 18-node n8n orchestration.</p>
+    <div class="metrics">
+      <span class="metric">96.8% Accuracy</span>
+      <span class="metric">3 Agents</span>
+      <span class="metric">18 Nodes</span>
+      <span class="metric">$0.04/decision</span>
+    </div>
+    <div class="cta">Launch Demo →</div>
+  </a>
+
+  <a href="ai-fintech-agent-demo.html" class="card">
+    <span class="tag tag-fintech">FINTECH</span>
+    <h2>AI Fintech Agent</h2>
+    <p>Autonomous customer engagement platform with churn prediction (10 signals), campaign orchestration, and GPT-5.2 executive narratives.</p>
+    <div class="metrics">
+      <span class="metric">10 Churn Signals</span>
+      <span class="metric">5 Agents</span>
+      <span class="metric">&lt;1s Detection</span>
+    </div>
+    <div class="cta">Launch Demo →</div>
+  </a>
+
+  <a href="patient-360-demo.html" class="card">
+    <span class="tag tag-health">HEALTHCARE</span>
+    <h2>Patient 360 Suite</h2>
+    <p>9-agent healthcare platform — triage, case scoring, next-best-action, touchpoint generation, denials detection, and strategic blueprints.</p>
+    <div class="metrics">
+      <span class="metric">9 Agents</span>
+      <span class="metric">360 View</span>
+      <span class="metric">4 Patient Tiers</span>
+    </div>
+    <div class="cta">Launch Demo →</div>
+  </a>
+
+  <a href="seclend-platform-demo.html" class="card">
+    <span class="tag tag-finserv">SECURITIES LENDING</span>
+    <h2>Securities Lending Platform</h2>
+    <p>10-agent platform covering inventory, locate, pricing, risk, lifecycle, collateral, and regulatory compliance across 15.9M+ records.</p>
+    <div class="metrics">
+      <span class="metric">10 Agents</span>
+      <span class="metric">15.9M+ Records</span>
+      <span class="metric">5hr Build</span>
+    </div>
+    <div class="cta">Launch Demo →</div>
+  </a>
+
+  <a href="atp-genai-demo.html" class="card">
+    <span class="tag tag-agile">AGILE / SAFe</span>
+    <h2>ATP GenAI Dashboard</h2>
+    <p>NLP query engine for SAFe portfolio analytics — ask in English, get entity insights, PO/RTE views, and ART health narratives instantly.</p>
+    <div class="metrics">
+      <span class="metric">4 Agents</span>
+      <span class="metric">NLP Query</span>
+      <span class="metric">&lt;2s Insight</span>
+    </div>
+    <div class="cta">Launch Demo →</div>
+  </a>
+
+  <a href="pitchperfect-ai-demo.html" class="card">
+    <span class="tag tag-genai">GENAI TOOL</span>
+    <h2>PitchPerfect AI</h2>
+    <p>AI-powered pitch deck generator — describe your pitch, get a polished 7-slide PPTX in 60 seconds. 4 deck types supported.</p>
+    <div class="metrics">
+      <span class="metric">7 Slides</span>
+      <span class="metric">4 Deck Types</span>
+      <span class="metric">60s Generation</span>
+    </div>
+    <div class="cta">Launch Demo →</div>
+  </a>
+
+</div>
+
+<div class="footer">
+  Built by <a href="https://linkedin.com/in/shyamaddanki" target="_blank">Shyam Addanki</a> with Claude Code | All data is synthetic
+</div>
+
+</body>
+</html>
