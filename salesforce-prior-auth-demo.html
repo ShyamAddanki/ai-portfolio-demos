@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prior Auth Agent — Salesforce Agentforce</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family:'Inter',sans-serif;
+    background:#0a0f0d;
+    color:#e6edf3;
+    overflow:hidden;
+    height:100vh;
+    width:100vw;
+  }
+
+  canvas#bg { position:fixed; top:0; left:0; z-index:0; }
+
+  .hud {
+    position:relative; z-index:2;
+    width:100vw; height:100vh;
+    display:grid;
+    grid-template-rows:58px 1fr 130px;
+    grid-template-columns:270px 1fr 280px;
+    gap:0;
+    padding:10px;
+  }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    grid-column:1/-1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 24px;
+    border-bottom:1px solid rgba(26,188,156,0.15);
+    background:rgba(10,15,13,0.9);
+    backdrop-filter:blur(12px);
+  }
+  .logo {
+    font-size:16px; font-weight:900;
+    background:linear-gradient(135deg,#1abc9c,#48d1cc,#00fa9a);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    letter-spacing:2px;
+  }
+  .case-id {
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px; color:#1abc9c;
+    background:rgba(26,188,156,0.08);
+    padding:5px 16px; border-radius:20px;
+    border:1px solid rgba(26,188,156,0.2);
+    font-weight:600;
+  }
+  .status {
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; color:#8b949e;
+    display:flex; align-items:center; gap:8px; font-weight:600;
+  }
+  .status-dot {
+    width:8px; height:8px; border-radius:50%;
+    background:#1abc9c;
+    box-shadow:0 0 12px rgba(26,188,156,0.5);
+    animation:blink 2s ease infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* ── LEFT PANEL ── */
+  .left-panel {
+    padding:18px 14px;
+    overflow-y:auto;
+    border-right:1px solid rgba(26,188,156,0.1);
+    background:rgba(13,17,23,0.7);
+    backdrop-filter:blur(8px);
+  }
+  .left-title {
+    font-size:9px; font-weight:800; letter-spacing:3px;
+    color:#1abc9c; text-transform:uppercase; margin-bottom:16px;
+  }
+  .stage {
+    display:flex; align-items:flex-start; gap:12px;
+    margin-bottom:4px; padding:10px;
+    border-radius:10px;
+    transition:all 0.4s ease;
+    position:relative;
+  }
+  .stage.active { background:rgba(26,188,156,0.06); }
+  .stage.done .stage-icon {
+    background:linear-gradient(135deg,#1abc9c,#2ecc71);
+    border-color:transparent;
+  }
+  .stage.done .stage-icon::after { content:'\2713'; color:#0a0f0d; font-size:10px; font-weight:900; }
+  .stage.active .stage-icon {
+    border-color:#1abc9c;
+    box-shadow:0 0 16px rgba(26,188,156,0.4);
+    animation:pulseIcon 1.2s ease infinite;
+  }
+  .stage.active .stage-icon::after {
+    content:''; width:6px; height:6px; border-radius:50%; background:#1abc9c;
+  }
+  @keyframes pulseIcon { 0%,100%{box-shadow:0 0 8px rgba(26,188,156,0.2);} 50%{box-shadow:0 0 22px rgba(26,188,156,0.6);} }
+  .stage-icon {
+    width:24px; height:24px; border-radius:50%;
+    border:2px solid #21262d;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; margin-top:2px;
+    transition:all 0.4s ease;
+    background:#161b22;
+  }
+  .stage-connector {
+    position:absolute; left:21px; top:36px;
+    width:2px; height:calc(100% - 10px);
+    background:linear-gradient(180deg,rgba(26,188,156,0.2),rgba(26,188,156,0.02));
+  }
+  .stage.done .stage-connector { background:linear-gradient(180deg,rgba(26,188,156,0.5),rgba(26,188,156,0.1)); }
+  .stage-info { flex:1; }
+  .stage-name { font-size:12px; font-weight:700; color:#484f58; transition:color 0.3s; }
+  .stage.active .stage-name { color:#1abc9c; }
+  .stage.done .stage-name { color:#e6edf3; }
+  .stage-detail { font-size:10px; color:#484f58; font-family:'JetBrains Mono',monospace; margin-top:2px; }
+  .stage.active .stage-detail { color:#1abc9c; opacity:0.7; }
+  .stage-time { font-size:9px; color:#484f58; font-family:'JetBrains Mono',monospace; margin-top:3px; opacity:0; transition:opacity 0.3s; }
+  .stage.done .stage-time { opacity:1; color:#1abc9c; font-weight:600; }
+  .stage.active .stage-time { opacity:1; color:#484f58; }
+
+  /* ── CENTER ── */
+  .center-panel {
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    position:relative; overflow:hidden;
+    background:transparent;
+  }
+
+  .orb-container { position:relative; width:340px; height:340px; }
+
+  .orb-glow {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:160px; height:160px; border-radius:50%;
+    background:conic-gradient(from 0deg,#1abc9c,#2ecc71,#00fa9a,#48d1cc,#0097a7,#1abc9c);
+    opacity:0.12; filter:blur(20px);
+    animation:glowSpin 6s linear infinite;
+  }
+  .orb-glow.processing { opacity:0.28; width:185px; height:185px; filter:blur(26px); }
+  .orb-glow.deciding {
+    opacity:0.35; width:195px; height:195px; filter:blur(28px);
+    background:conic-gradient(from 0deg,#f0883e,#fbbf24,#f59e0b,#ef4444,#f0883e);
+  }
+  .orb-glow.done {
+    opacity:0.42; width:210px; height:210px; filter:blur(32px);
+    background:conic-gradient(from 0deg,#1abc9c,#2ecc71,#00fa9a,#48d1cc,#1abc9c);
+  }
+  @keyframes glowSpin { 0%{transform:translate(-50%,-50%) rotate(0deg);} 100%{transform:translate(-50%,-50%) rotate(360deg);} }
+
+  .orb {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:136px; height:136px; border-radius:50%;
+    background:conic-gradient(from 0deg,#1abc9c,#2ecc71,#00fa9a,#48d1cc,#0097a7,#1abc9c);
+    padding:3px;
+    animation:orbSpin 8s linear infinite;
+    transition:all 0.6s ease;
+    box-shadow:0 0 30px rgba(26,188,156,0.12);
+  }
+  .orb-inner {
+    width:100%; height:100%; border-radius:50%;
+    background:#0d1117;
+    display:flex; align-items:center; justify-content:center;
+  }
+  @keyframes orbSpin { 0%{transform:translate(-50%,-50%) rotate(0deg);} 100%{transform:translate(-50%,-50%) rotate(360deg);} }
+
+  .orb.processing {
+    box-shadow:0 0 40px rgba(26,188,156,0.3),0 0 80px rgba(46,204,113,0.12);
+    animation:orbSpin 4s linear infinite,orbBreath 2s ease infinite;
+  }
+  .orb.deciding {
+    background:conic-gradient(from 0deg,#f0883e,#fbbf24,#f59e0b,#fb923c,#f0883e);
+    box-shadow:0 0 40px rgba(240,136,62,0.3),0 0 80px rgba(251,191,36,0.12);
+    animation:orbSpin 3s linear infinite,orbBreath 1.5s ease infinite;
+  }
+  .orb.done {
+    background:conic-gradient(from 0deg,#1abc9c,#2ecc71,#00fa9a,#48d1cc,#1abc9c);
+    box-shadow:0 0 50px rgba(26,188,156,0.4),0 0 100px rgba(46,204,113,0.15);
+    animation:orbSpin 6s linear infinite,orbBreath 2s ease infinite;
+  }
+  @keyframes orbBreath {
+    0%,100%{transform:translate(-50%,-50%) scale(1);}
+    50%{transform:translate(-50%,-50%) scale(1.07);}
+  }
+
+  .sparkle { position:absolute; width:4px; height:4px; border-radius:50%; opacity:0; }
+  .sparkle.active { animation:sparkleFloat 2.2s ease-in-out infinite; }
+  .sparkle:nth-child(1) { top:18%; left:14%; background:#1abc9c; animation-delay:0s; }
+  .sparkle:nth-child(2) { top:10%; right:18%; background:#2ecc71; animation-delay:0.4s; }
+  .sparkle:nth-child(3) { bottom:14%; left:18%; background:#f0883e; animation-delay:0.8s; }
+  .sparkle:nth-child(4) { bottom:18%; right:14%; background:#48d1cc; animation-delay:1.2s; }
+  .sparkle:nth-child(5) { top:42%; left:4%; background:#00fa9a; animation-delay:0.2s; }
+  .sparkle:nth-child(6) { top:28%; right:4%; background:#1abc9c; animation-delay:0.6s; }
+  .sparkle:nth-child(7) { bottom:32%; left:7%; background:#f59e0b; animation-delay:1.0s; }
+  .sparkle:nth-child(8) { bottom:8%; right:22%; background:#2ecc71; animation-delay:1.4s; }
+  @keyframes sparkleFloat {
+    0%{opacity:0;transform:scale(0) translateY(10px);}
+    30%{opacity:0.9;transform:scale(1.3) translateY(-5px);}
+    60%{opacity:0.4;transform:scale(0.8) translateY(-16px);}
+    100%{opacity:0;transform:scale(0) translateY(-28px);}
+  }
+
+  .ring {
+    position:absolute; top:50%; left:50%;
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+  }
+  .ring1 { width:195px; height:195px; border:1.5px solid rgba(26,188,156,0.18); animation:ringRotate 20s linear infinite; }
+  .ring2 { width:255px; height:255px; border:1.5px dashed rgba(46,204,113,0.12); animation:ringRotate 30s linear infinite reverse; }
+  .ring3 { width:318px; height:318px; border:1.5px solid rgba(0,250,154,0.08); animation:ringRotate 24s linear infinite; }
+  @keyframes ringRotate { 0%{transform:translate(-50%,-50%) rotate(0deg);} 100%{transform:translate(-50%,-50%) rotate(360deg);} }
+
+  .ring-dot {
+    position:absolute; width:7px; height:7px; border-radius:50%; top:-4px; left:50%;
+  }
+  .ring1 .ring-dot { background:#1abc9c; box-shadow:0 0 14px rgba(26,188,156,0.7),0 0 28px rgba(26,188,156,0.3); }
+  .ring2 .ring-dot { background:#2ecc71; box-shadow:0 0 14px rgba(46,204,113,0.7),0 0 28px rgba(46,204,113,0.3); }
+  .ring3 .ring-dot { background:#00fa9a; box-shadow:0 0 14px rgba(0,250,154,0.6),0 0 28px rgba(0,250,154,0.2); }
+
+  .orb-label {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center; pointer-events:none;
+  }
+  .orb-label .main {
+    font-size:13px; font-weight:900;
+    background:linear-gradient(135deg,#1abc9c,#2ecc71);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    text-transform:uppercase; letter-spacing:2px;
+    transition:all 0.4s ease;
+  }
+  .orb-label .sub {
+    font-size:10px; color:#8b949e;
+    font-family:'JetBrains Mono',monospace; margin-top:4px;
+  }
+
+  .center-msg {
+    position:absolute; bottom:28px; text-align:center;
+    opacity:0; transition:all 0.6s ease;
+  }
+  .center-msg.show { opacity:1; }
+  .center-msg .text {
+    font-size:11px; font-family:'JetBrains Mono',monospace; color:#1abc9c;
+    background:rgba(26,188,156,0.06); padding:8px 18px;
+    border-radius:20px; border:1px solid rgba(26,188,156,0.15); font-weight:600;
+  }
+
+  /* ── RIGHT PANEL ── */
+  .right-panel {
+    padding:18px 14px;
+    border-left:1px solid rgba(26,188,156,0.1);
+    overflow-y:auto;
+    background:rgba(13,17,23,0.7);
+    backdrop-filter:blur(8px);
+  }
+  .right-title {
+    font-size:9px; font-weight:800; letter-spacing:3px;
+    color:#1abc9c; text-transform:uppercase; margin-bottom:16px;
+  }
+  .log-entry {
+    padding:8px 10px; margin-bottom:5px;
+    border-radius:8px; border-left:3px solid transparent;
+    opacity:0; transform:translateX(10px);
+    transition:all 0.4s ease;
+  }
+  .log-entry.show { opacity:1; transform:translateX(0); }
+  .log-entry.info { border-left-color:#1abc9c; background:rgba(26,188,156,0.04); }
+  .log-entry.warn { border-left-color:#f0883e; background:rgba(240,136,62,0.04); }
+  .log-entry.success { border-left-color:#2ecc71; background:rgba(46,204,113,0.06); }
+  .log-entry.agent { border-left-color:#58a6ff; background:rgba(88,166,255,0.04); }
+  .log-time { font-family:'JetBrains Mono',monospace; font-size:9px; color:#484f58; font-weight:600; }
+  .log-msg { color:#8b949e; margin-top:3px; font-size:10px; line-height:1.4; }
+  .log-msg .hl { color:#1abc9c; font-weight:700; }
+  .log-msg .warn-hl { color:#f0883e; font-weight:700; }
+  .log-msg .agent-hl { color:#58a6ff; font-weight:700; }
+
+  /* ── BOTTOM ── */
+  .bottom-bar {
+    grid-column:1/-1;
+    display:grid; grid-template-columns:repeat(4,1fr);
+    gap:12px; padding:12px 10px 0;
+    border-top:1px solid rgba(26,188,156,0.1);
+    background:rgba(10,15,13,0.8);
+  }
+  .metric-card {
+    background:rgba(22,27,34,0.8);
+    border:1px solid #21262d; border-radius:12px;
+    padding:14px 16px; text-align:center;
+    opacity:0; transform:translateY(14px);
+    transition:all 0.5s cubic-bezier(0.16,1,0.3,1);
+  }
+  .metric-card.show { opacity:1; transform:translateY(0); }
+  .metric-card .val {
+    font-family:'JetBrains Mono',monospace;
+    font-size:28px; font-weight:700; line-height:1;
+  }
+  .metric-card .lbl {
+    font-size:9px; font-weight:700; color:#484f58;
+    text-transform:uppercase; letter-spacing:1.5px; margin-top:7px;
+  }
+  .mc1 .val { color:#1abc9c; }
+  .mc1.show { border-color:rgba(26,188,156,0.25); }
+  .mc2 .val { color:#2ecc71; }
+  .mc2.show { border-color:rgba(46,204,113,0.25); }
+  .mc3 .val { color:#f0883e; }
+  .mc3.show { border-color:rgba(240,136,62,0.25); }
+  .mc4 .val { color:#58a6ff; }
+  .mc4.show { border-color:rgba(88,166,255,0.25); }
+
+  .footer-line {
+    grid-column:1/-1;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:5px 10px 0;
+    opacity:0; transition:opacity 0.6s ease;
+  }
+  .footer-line.show { opacity:1; }
+  .footer-line .tagline { font-size:12px; font-weight:800; font-style:italic; color:#8b949e; }
+  .footer-line .author {
+    font-size:14px; font-weight:800;
+    background:linear-gradient(135deg,#1abc9c,#2ecc71);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+
+  /* ── VERDICT ── */
+  .verdict-overlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    z-index:50; pointer-events:none;
+    opacity:0; transition:opacity 0.6s ease;
+    background:rgba(10,15,13,0.88);
+    backdrop-filter:blur(14px);
+  }
+  .verdict-overlay.show { opacity:1; }
+  .verdict-box { text-align:center; transform:scale(0.8); transition:transform 0.6s cubic-bezier(0.34,1.56,0.64,1); }
+  .verdict-overlay.show .verdict-box { transform:scale(1); }
+  .verdict-text {
+    font-size:60px; font-weight:900;
+    background:linear-gradient(135deg,#f0883e,#fbbf24);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    letter-spacing:8px;
+    filter:drop-shadow(0 4px 24px rgba(26,188,156,0.3));
+  }
+  .verdict-sub {
+    font-size:12px; color:#8b949e;
+    font-family:'JetBrains Mono',monospace;
+    margin-top:12px; letter-spacing:2px; font-weight:600;
+  }
+  .verdict-actions {
+    display:flex; gap:10px; justify-content:center; margin-top:20px; flex-wrap:wrap;
+  }
+  .verdict-action {
+    background:rgba(26,188,156,0.08); border:1px solid rgba(26,188,156,0.2);
+    border-radius:8px; padding:10px 18px;
+    font-size:11px; color:#1abc9c; font-weight:700;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  .replay-btn {
+    position:fixed; bottom:18px; right:18px;
+    background:linear-gradient(135deg,#1abc9c,#2ecc71);
+    color:#0a0f0d; border:none; border-radius:50px;
+    padding:12px 26px;
+    font-family:'Inter',sans-serif; font-size:12px; font-weight:800;
+    cursor:pointer; opacity:0; z-index:100;
+    box-shadow:0 8px 30px rgba(26,188,156,0.3);
+    transition:all 0.3s ease; letter-spacing:0.5px;
+  }
+  .replay-btn.show { opacity:1; }
+  .replay-btn:hover { transform:scale(1.06); box-shadow:0 12px 40px rgba(26,188,156,0.4); }
+
+  /* ── SALESFORCE BADGE + VOICE PANEL ── */
+  .sf-badge {
+    font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:1px;
+    color:#58a6ff; background:rgba(88,166,255,0.08); border:1px solid rgba(88,166,255,0.25);
+    padding:4px 12px; border-radius:20px; margin-left:12px;
+  }
+  .voice-btn {
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+    color:#1abc9c; background:rgba(26,188,156,0.08); border:1px solid rgba(26,188,156,0.3);
+    padding:5px 14px; border-radius:20px; cursor:pointer; margin-right:14px;
+  }
+  .voice-btn.on { color:#0a0f0d; background:linear-gradient(135deg,#1abc9c,#2ecc71); }
+  .voice-box {
+    position:absolute; top:22px; left:50%; transform:translateX(-50%) translateY(-8px);
+    width:min(600px,92%); padding:12px 16px; border-radius:14px;
+    background:rgba(13,17,23,0.85); border:1px solid rgba(26,188,156,0.18);
+    opacity:0; transition:all 0.4s ease; z-index:3;
+  }
+  .voice-box.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .voice-box.agent { border-color:rgba(88,166,255,0.35); }
+  .voice-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .voice-who { font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:#1abc9c; }
+  .voice-box.agent .voice-who { color:#58a6ff; }
+  .voice-via { font-family:'JetBrains Mono',monospace; font-size:9px; color:#484f58; margin-left:auto; }
+  .wave { display:flex; align-items:center; gap:3px; height:16px; }
+  .wave span { width:3px; height:4px; border-radius:2px; background:#1abc9c; }
+  .voice-box.agent .wave span { background:#58a6ff; }
+  .voice-box.talking .wave span { animation:wave 0.9s ease-in-out infinite; }
+  .wave span:nth-child(2){animation-delay:0.1s} .wave span:nth-child(3){animation-delay:0.2s}
+  .wave span:nth-child(4){animation-delay:0.3s} .wave span:nth-child(5){animation-delay:0.4s}
+  .wave span:nth-child(6){animation-delay:0.5s} .wave span:nth-child(7){animation-delay:0.6s}
+  @keyframes wave { 0%,100%{height:4px;} 50%{height:16px;} }
+  .voice-text { font-size:13px; line-height:1.45; color:#e6edf3; min-height:19px; }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<div class="hud">
+  <div class="top-bar">
+    <div class="logo">PRIOR AUTH AGENT<span class="sf-badge">&#9729; SALESFORCE AGENTFORCE</span></div>
+    <div class="case-id" id="caseId">SAMPLE 10 · CIGNA · RIGHT TOTAL KNEE ARTHROPLASTY</div>
+    <div class="status"><button class="voice-btn" id="voiceBtn" onclick="toggleVoice()"></button><div class="status-dot" id="statusDot"></div><span id="statusText">INITIALIZING</span></div>
+  </div>
+
+  <!-- LEFT: Pipeline Stages -->
+  <div class="left-panel">
+    <div class="left-title">Agentforce Pipeline</div>
+    <div class="stage" id="s1"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Voice In</div><div class="stage-detail">speech to text · Whisper</div><div class="stage-time">—</div></div></div>
+    <div class="stage" id="s2"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Agentforce Agent</div><div class="stage-detail">Prior_Auth_Agent → PriorAuthAction</div><div class="stage-time">—</div></div></div>
+    <div class="stage" id="s3"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Policy Search</div><div class="stage-detail">payer + procedure filter · BM25</div><div class="stage-time">—</div></div></div>
+    <div class="stage" id="s4"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Clinical Review</div><div class="stage-detail">1 model call · MET / NOT_MET / UNCLEAR</div><div class="stage-time">—</div></div></div>
+    <div class="stage" id="s5"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Verify in Code</div><div class="stage-detail">quote check · section resolve · gate</div><div class="stage-time">—</div></div></div>
+    <div class="stage" id="s6"><div class="stage-icon"></div><div class="stage-connector"></div><div class="stage-info"><div class="stage-name">Decision</div><div class="stage-detail">made in Apex, not by the model</div><div class="stage-time">—</div></div></div>
+    <div class="stage" id="s7"><div class="stage-icon"></div><div class="stage-info"><div class="stage-name">Voice Out</div><div class="stage-detail">plain-English reason + next step</div><div class="stage-time">—</div></div></div>
+  </div>
+
+  <!-- CENTER: Orb -->
+  <div class="center-panel">
+        <div class="voice-box" id="voiceBox">
+      <div class="voice-head"><div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="voice-who" id="voiceWho">Caller</div><div class="voice-via" id="voiceVia"></div></div>
+      <div class="voice-text" id="voiceText"></div>
+    </div>
+    <div class="orb-container">
+      <div class="ring ring3"><div class="ring-dot"></div></div>
+      <div class="ring ring2"><div class="ring-dot" style="left:auto;right:0;top:50%;"></div></div>
+      <div class="ring ring1"><div class="ring-dot" style="top:auto;bottom:-4px;left:30%;"></div></div>
+      <div class="sparkle" id="sp1"></div>
+      <div class="sparkle" id="sp2"></div>
+      <div class="sparkle" id="sp3"></div>
+      <div class="sparkle" id="sp4"></div>
+      <div class="sparkle" id="sp5"></div>
+      <div class="sparkle" id="sp6"></div>
+      <div class="sparkle" id="sp7"></div>
+      <div class="sparkle" id="sp8"></div>
+      <div class="orb-glow" id="orbGlow"></div>
+      <div class="orb" id="orb"><div class="orb-inner"></div></div>
+      <div class="orb-label">
+        <div class="main" id="orbMain">READY</div>
+        <div class="sub" id="orbSub">awaiting a request</div>
+      </div>
+    </div>
+    <div class="center-msg" id="centerMsg"><div class="text" id="centerText"></div></div>
+  </div>
+
+  <!-- RIGHT: Log -->
+  <div class="right-panel">
+    <div class="right-title">Live Processing Log</div>
+    <div id="logContainer"></div>
+  </div>
+
+  <!-- BOTTOM: Metrics -->
+  <div class="bottom-bar">
+    <div class="metric-card mc1" id="mc1"><div class="val" id="mcv1">—</div><div class="lbl">Policy Sections</div></div>
+    <div class="metric-card mc2" id="mc2"><div class="val" id="mcv2">—</div><div class="lbl">Unsafe Approvals / 20</div></div>
+    <div class="metric-card mc3" id="mc3"><div class="val" id="mcv3">—</div><div class="lbl">Testing Center</div></div>
+    <div class="metric-card mc4" id="mc4"><div class="val" id="mcv4">—</div><div class="lbl">Model Calls per Case</div></div>
+    <div class="footer-line" id="footerLine">
+      <div class="tagline">The model reads the note. The code makes the decision and checks every quote.</div>
+      <div class="author">— Shyam Addanki · hirereadypm.ai</div>
+    </div>
+  </div>
+</div>
+
+<!-- VERDICT OVERLAY -->
+<div class="verdict-overlay" id="verdictOverlay">
+  <div class="verdict-box">
+    <div class="verdict-text">NOT APPROVED</div>
+    <div class="verdict-sub">CIGNA · KNEE ARTHROPLASTY · CRITERIA NOT MET · EVERY QUOTE VERIFIED</div>
+    <div class="verdict-actions">
+      <div class="verdict-action">&rarr; Document a conservative care trial</div>
+      <div class="verdict-action">&rarr; Send an updated WOMAC score</div>
+      <div class="verdict-action">&rarr; Record PA-#### saved with citations</div>
+    </div>
+  </div>
+</div>
+
+<button class="replay-btn" id="replayBtn" onclick="replay()">&#9654; &nbsp;Replay</button>
+
+<script>
+// ── Teal canvas particle background ──
+const c = document.getElementById('bg');
+const ctx = c.getContext('2d');
+c.width = innerWidth; c.height = innerHeight;
+window.addEventListener('resize', () => { c.width = innerWidth; c.height = innerHeight; });
+
+const colors = [
+  [26,188,156],  // teal
+  [46,204,113],  // emerald
+  [0,250,154],   // spring green
+  [72,209,204],  // medium turquoise
+  [240,136,62],  // orange accent
+  [88,166,255],  // blue accent
+  [0,151,167],   // cyan deep
+];
+
+const pts = Array.from({length:55}, () => {
+  const col = colors[Math.floor(Math.random()*colors.length)];
+  return {
+    x:Math.random()*c.width, y:Math.random()*c.height,
+    vx:(Math.random()-0.5)*0.14, vy:(Math.random()-0.5)*0.14,
+    r:Math.random()*2+0.5, col,
+    o:Math.random()*0.1+0.03
+  };
+});
+
+function drawBg() {
+  ctx.clearRect(0,0,c.width,c.height);
+  pts.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if(p.x<0||p.x>c.width) p.vx*=-1;
+    if(p.y<0||p.y>c.height) p.vy*=-1;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},${p.o})`;
+    ctx.fill();
+  });
+  for(let i=0;i<pts.length;i++) {
+    for(let j=i+1;j<pts.length;j++) {
+      const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d<130) {
+        const avg=[(pts[i].col[0]+pts[j].col[0])/2,(pts[i].col[1]+pts[j].col[1])/2,(pts[i].col[2]+pts[j].col[2])/2];
+        ctx.beginPath();
+        ctx.moveTo(pts[i].x,pts[i].y);
+        ctx.lineTo(pts[j].x,pts[j].y);
+        ctx.strokeStyle=`rgba(${avg[0]|0},${avg[1]|0},${avg[2]|0},${0.03*(1-d/130)})`;
+        ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ── Helpers ──
+const $=id=>document.getElementById(id);
+
+function addLog(type,time,msg) {
+  const d=document.createElement('div');
+  d.className=`log-entry ${type}`;
+  d.innerHTML=`<div class="log-time">${time}</div><div class="log-msg">${msg}</div>`;
+  $('logContainer').appendChild(d);
+  setTimeout(()=>d.classList.add('show'),50);
+  d.scrollIntoView({behavior:'smooth',block:'end'});
+}
+function setStage(id,state,timeText) {
+  const el=$(id);
+  el.classList.remove('active','done');
+  el.classList.add(state);
+  el.querySelector('.stage-time').textContent=timeText||'';
+}
+function setOrb(main,sub,cls) {
+  $('orbMain').textContent=main;
+  $('orbSub').textContent=sub;
+  $('orb').className='orb '+(cls||'');
+  $('orbGlow').className='orb-glow '+(cls||'');
+  document.querySelectorAll('.sparkle').forEach(s=>{
+    if(cls) s.classList.add('active');
+    else s.classList.remove('active');
+  });
+}
+function setStatus(t){$('statusText').textContent=t;}
+function showCenter(t){$('centerText').textContent=t;$('centerMsg').classList.add('show');}
+function hideCenter(){$('centerMsg').classList.remove('show');}
+function countUp(id,end,dur,fmt){
+  const el=$(id),t0=performance.now();
+  (function tick(now){
+    const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,3);
+    el.textContent=fmt(end*e);
+    if(p<1)requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+
+// ── Voice panel: words in (speech to text), reply out (text to speech) ──
+// Voice is OFF until the visitor asks for it. Recorded clips (OpenAI tts-1-hd) play when it is on.
+let voiceOn = false, clip = null, typing = null;
+function paintVoiceBtn(){ const b=$('voiceBtn'); b.classList.toggle('on',voiceOn);
+  b.innerHTML = voiceOn ? '&#9209; Stop voice' : '&#128264; Hear the voice'; b.title = voiceOn ? 'Stop the voice (Esc)' : 'Replay with voice'; }
+function stopVoice(){ if(clip){ clip.pause(); clip=null; } if(window.speechSynthesis) speechSynthesis.cancel(); }
+function voiceOff(){ if(!voiceOn) return; voiceOn=false; stopVoice(); paintVoiceBtn(); }   // the animation keeps playing, silently
+let timers=[], HUD0='';
+function toggleVoice(){ if(voiceOn){ voiceOff(); } else { voiceOn=true; replay(); } }
+function replay(){   // restart in place: the click keeps the browser's permission to play sound
+  timers.forEach(clearTimeout); timers=[]; stopVoice(); clearInterval(typing);
+  document.querySelector('.hud').innerHTML=HUD0;
+  $('verdictOverlay').classList.remove('show'); $('replayBtn').classList.remove('show');
+  paintVoiceBtn(); setTimeout(run,300);
+}
+// stop the sound when the visitor presses Esc, switches tab or leaves the page
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') voiceOff(); });
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) voiceOff(); });
+window.addEventListener('pagehide', voiceOff);
+function browserSpeak(text, lang){   // fallback only, if a clip cannot play
+  if(!window.speechSynthesis) return;
+  const u=new SpeechSynthesisUtterance(text); u.lang=lang||'en-US';
+  const best=speechSynthesis.getVoices().find(v=>v.lang.startsWith((lang||'en').slice(0,2)) && /Natural|Online|Google|Samantha/.test(v.name));
+  if(best) u.voice=best; speechSynthesis.speak(u);
+}
+function voice(role, text, via, lang, src, secs){
+  const box=$('voiceBox'), agent=role!=='caller';
+  box.className='voice-box show talking'+(agent?' agent':'');
+  $('voiceWho').textContent = agent ? 'Agentforce agent · speaking' : 'Caller · speaking';
+  $('voiceVia').textContent = via||'';
+  const el=$('voiceText'); el.textContent=''; let i=0;
+  const words=text.split(' '), step=Math.max(70, (secs||3)*1000*0.9/words.length);   // words appear at speaking pace
+  clearInterval(typing);
+  typing=setInterval(()=>{ el.textContent=words.slice(0,++i).join(' '); if(i>=words.length){clearInterval(typing); setTimeout(()=>box.classList.remove('talking'),400);} }, step);
+  if(!voiceOn) return;
+  stopVoice();
+  if(!src){ browserSpeak(text, lang); return; }
+  clip=new Audio(src);
+  clip.play().catch(()=>browserSpeak(text, lang));
+}
+function voiceHide(){ $('voiceBox').classList.remove('show'); }
+
+// ── MAIN TIMELINE ──
+function run() {
+  const T = [
+    [400, ()=>{ setStatus('LISTENING'); setOrb('LISTEN','voice in','processing'); }],
+    [700, ()=>{ setStage('s1','active'); }],
+    [900, ()=>{ voice('caller',"Run sample ten and tell me if it's approved.","Whisper \u00b7 speech to text",'en-US','audio/salesforce-prior-auth-demo/6123e9fb93af.mp3',2.71) }],
+    [2400, ()=>{ addLog('info','STEP 1',"Speech to text: <span class=\"hl\">\"Run sample ten\"</span> \u2192 Cigna \u00b7 elective orthopedic surgery") }],
+    [2800, ()=>{ setStage('s1','done','transcribed'); }],
+    [3000, ()=>{ setStage('s2','active'); setOrb('AGENT','routing...','processing'); setStatus('AGENTFORCE ROUTING'); }],
+    [3300, ()=>{ addLog('agent','STEP 2',"<span class=\"agent-hl\">Prior_Auth_Agent</span> \u2192 invocable Apex <span class=\"hl\">PriorAuthAction</span>") }],
+    [3700, ()=>{ addLog('info','CASE',"51M \u00b7 right total knee arthroplasty \u00b7 KL Grade II \u00b7 WOMAC <span class=\"hl\">28/96</span>") }],
+    [4100, ()=>{ setStage('s2','done','case loaded'); }],
+    [4300, ()=>{ setStage('s3','active'); setOrb('SEARCH','policy sections','processing'); setStatus('POLICY SEARCH'); showCenter('Only this payer’s rulebook. Never another insurer’s.'); }],
+    [4600, ()=>{ addLog('info','STEP 3',"<span class=\"hl\">PriorAuthPolicySearch</span>: filter Cigna + SURG_ORTHO + general over <span class=\"hl\">97 policy sections</span>") }],
+    [5100, ()=>{ addLog('info','STEP 3',"BM25 ranking \u2192 <span class=\"hl\">top 6 sections</span> retrieved \u00b7 0 from another payer") }],
+    [5500, ()=>{ setStage('s3','done','6 sections'); hideCenter(); }],
+    [5700, ()=>{ setStage('s4','active'); setOrb('REVIEW','1 model call','processing'); setStatus('CLINICAL REVIEW'); }],
+    [6000, ()=>{ addLog('agent','STEP 4',"<span class=\"agent-hl\">PriorAuthReview</span>: one gpt-4.1-mini call via Named Credential \u2192 each criterion MET / NOT_MET / UNCLEAR with a quote") }],
+    [6600, ()=>{ addLog('warn','NOT MET',"<span class=\"warn-hl\">Conservative care</span>: \"No PT attempted, no NSAIDs trialed, no injections\"") }],
+    [7100, ()=>{ addLog('warn','NOT MET',"<span class=\"warn-hl\">Function score</span>: \"WOMAC score 28/96 (below surgery threshold of 39)\"") }],
+    [7600, ()=>{ addLog('warn','NOT MET',"<span class=\"warn-hl\">Functional limitation</span>: \"independent with all self-care\"") }],
+    [8000, ()=>{ setStage('s4','done','criteria scored'); }],
+    [8200, ()=>{ setStage('s5','active'); setOrb('VERIFY','in code','deciding'); setStatus('VERIFYING'); }],
+    [8500, ()=>{ addLog('info','STEP 5',"Quote check: every quote found word for word in the clinical note \u00b7 <span class=\"hl\">sections resolved</span>") }],
+    [9000, ()=>{ addLog('info','STEP 5',"Safety gate in Apex: no approval without every criterion met and cited") }],
+    [9400, ()=>{ setStage('s5','done','verified'); }],
+    [9600, ()=>{ setStage('s6','active'); setOrb('DECIDE','in Apex','deciding'); setStatus('DECIDING'); }],
+    [9900, ()=>{ addLog('warn','DECISION',"<span class=\"warn-hl\">NOT APPROVED</span>: decided in code from the verified criteria, not by the model") }],
+    [10300, ()=>{ addLog('info','RECORD',"Prior_Auth_Request__c <span class=\"hl\">PA-####</span> saved with criteria, quotes and sections") }],
+    [10700, ()=>{ setStage('s6','done','not approved'); }],
+    [10900, ()=>{ setStage('s7','active'); setOrb('SPEAK','voice out','done'); setStatus('SPEAKING'); }],
+    [11100, ()=>{ voice('agent',"Not approved. No physical therapy, anti-inflammatories or injections have been tried, and the WOMAC score is 28, below the threshold of 39. Send a conservative care trial and an updated score.","OpenAI TTS \u00b7 speaking",'en-US','audio/salesforce-prior-auth-demo/361c4295ca9e.mp3',12.67) }],
+    [24270, ()=>{ voice('caller',"What should we send the payer?","Whisper \u00b7 speech to text",'en-US','audio/salesforce-prior-auth-demo/66264db439d9.mp3',1.87) }],
+    [26640, ()=>{ voice('agent',"Notes showing a trial of physical therapy and anti-inflammatories, and a new WOMAC score. Each item maps to a policy section.","OpenAI TTS \u00b7 speaking",'en-US','audio/salesforce-prior-auth-demo/5432c239f34f.mp3',7.58) }],
+    [29840, ()=>{ addLog('success','EVAL',"Live eval on 20 cases: <span class=\"hl\">0 unsafe approvals</span> \u00b7 Testing Center answer key <span class=\"hl\">5/5</span>") }],
+    [30240, ()=>{ setStage('s7','done','explained'); voiceHide(); setStatus('COMPLETE'); }],
+    [34720, ()=>{ $('verdictOverlay').classList.add('show'); }],
+    [37120, ()=>{ $('verdictOverlay').classList.remove('show'); }],
+    [37420, ()=>{ $('mc1').classList.add('show'); countUp('mcv1',97,900,v=>Math.round(v).toString()); }],
+    [37720, ()=>{ $('mc2').classList.add('show'); setTimeout(()=>$('mcv2').textContent='0',350); }],
+    [38020, ()=>{ $('mc3').classList.add('show'); setTimeout(()=>$('mcv3').textContent='5/5',350); }],
+    [38320, ()=>{ $('mc4').classList.add('show'); setTimeout(()=>$('mcv4').textContent='1',350); }],
+    [39020, ()=>{ $('footerLine').classList.add('show'); }],
+    [39720, ()=>{ $('replayBtn').classList.add('show'); }]
+  ];
+  T.forEach(([t,fn])=>timers.push(setTimeout(fn,t)));
+}
+window.addEventListener('load',()=>{ HUD0=document.querySelector('.hud').innerHTML; paintVoiceBtn(); setTimeout(run,300); });
+</script>
+</body>
+</html>
